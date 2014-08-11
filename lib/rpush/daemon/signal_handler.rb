@@ -1,45 +1,35 @@
 module Rpush
   module Daemon
     class SignalHandler
-      class << self
-        attr_reader :thread
-      end
 
       def self.start
         return unless trap_signals?
-        @shutting_down = false
-        read_io, @write_io = IO.pipe
-        start_handler(read_io)
+
         %w(INT TERM HUP USR2).each do |signal|
-          Signal.trap(signal) { @write_io.write("#{Signal.list[signal]}\n") }
+          Signal.trap(signal) {
+            Thread.new { start_handler(signal) }
+          }
         end
       end
 
-      def self.stop
-        @write_io.write("shutdown\n") if @write_io
-        @thread.join if @thread
-      end
+      def self.start_handler(signal)
+        Rpush.logger.info "Trapped signal #{signal}."
 
-      def self.start_handler(read_io)
-        @thread = Thread.new do
-          loop do
-            case read_io.readline.strip.to_i
-            when Signal.list['HUP']
-              Synchronizer.sync
-              Feeder.wakeup
-            when Signal.list['USR2']
-              AppRunner.debug
-            when Signal.list['INT'], Signal.list['TERM']
-              Thread.new { handle_shutdown_signal }
-            else
-              break
-            end
-          end
+        case signal
+        when 'HUP'
+          Synchronizer.sync
+          Feeder.wakeup
+        when 'USR2'
+          AppRunner.debug
+        when 'INT', 'TERM'
+          handle_shutdown_signal
+        else
+          # This should never happen, but hey, who knows?
+          Rpush.logger.warn "Caught unknown signal: #{signal}."
         end
       end
 
       def self.handle_shutdown_signal
-        @shutting_down = true
         Rpush::Daemon.shutdown
       end
 

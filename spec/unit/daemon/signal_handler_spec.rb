@@ -1,6 +1,9 @@
 require 'unit_spec_helper'
 
 describe Rpush::Daemon::SignalHandler do
+
+  let (:logger) { double() }
+
   def signal_handler(sig)
     Process.kill(sig, Process.pid)
     sleep 0.1
@@ -9,12 +12,17 @@ describe Rpush::Daemon::SignalHandler do
   def with_handler_start_stop
     Rpush::Daemon::SignalHandler.start
     yield
-  ensure
-    Rpush::Daemon::SignalHandler.stop
+  end
+
+  before do
+    allow(Rpush).to receive(:logger).and_return(logger)
   end
 
   describe 'shutdown signals' do
     unless Rpush.jruby? # These tests do not work on JRuby.
+
+      before { expect(logger).to receive(:info).with(a_kind_of(String)) }
+
       it "shuts down when signaled signaled SIGINT" do
         with_handler_start_stop do
           Rpush::Daemon.should_receive(:shutdown)
@@ -44,6 +52,7 @@ describe Rpush::Daemon::SignalHandler do
     before do
       Rpush::Daemon::Synchronizer.stub(:sync)
       Rpush::Daemon::Feeder.stub(:wakeup)
+      expect(logger).to receive(:info).with(a_kind_of(String))
     end
 
     it 'syncs' do
@@ -62,6 +71,9 @@ describe Rpush::Daemon::SignalHandler do
   end
 
   describe 'USR2' do
+
+    before { expect(logger).to receive(:info).with(a_kind_of(String)) }
+
     it 'instructs the AppRunner to print debug information' do
       with_handler_start_stop do
         Rpush::Daemon::AppRunner.should_receive(:debug)
