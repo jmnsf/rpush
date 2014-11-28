@@ -1,4 +1,25 @@
-## 2.0.0 (unreleased)
+## 2.3.0 (unreleased)
+  * Add 'version' CLI command.
+  * Rpush::Wpns::Notification now supports setting the 'data' attribute.
+
+## 2.2.0 (Oct 7, 2014)
+  * Numerous command-line fixes, sorry folks!
+  * Add 'rpush push' command-line command for one-off use.
+
+## 2.1.0 (Oct 4, 2014)
+  * Bump APNs max payload size to 2048 for iOS 8.
+  * Add 'category' for iOS 8.
+  * Add url_args for Safari Push Notification Support (#77).
+  * Improved command-line interface.
+  * Rails integration is now optional.
+  * Added log_level config option.
+  * log_dir is now deprecated and has no effect, use log_file instead.
+
+## 2.0.1 (Sept 13, 2014)
+  * Add ssl_certificate_revoked reflection (#68).
+  * Fix for Postgis support in 2.0.0 migration (#70).
+
+## 2.0.0 (Sept 6, 2014)
   * Use APNs enhanced binary format version 2.
   * Support running multiple Rpush processes when using ActiveRecord and Redis.
   * APNs error detection is now performed asynchronously, 'check_for_errors' is therefore deprecated.
@@ -11,6 +32,7 @@
   * The 'batch_storage_updates' config option has been deprecated, storage backends will now always batch updates where appropriate.
   * The rpush process title updates with number of queued notifications and number of dispatchers.
   * Rpush::Apns::Feedback#app has been renamed to app_id and is now an Integer.
+  * An app is restarted when the HUP signal is received if its certificate or environment attribute changed.
 
 ## 1.0.0 (Feb 9, 2014)
   * Renamed to Rpush (from Rapns). Version number reset to 1.0.0.

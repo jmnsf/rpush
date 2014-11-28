@@ -5,9 +5,7 @@ describe 'APNs' do
   let(:app) { create_app }
   let!(:notification) { create_notification }
   let(:tcp_socket) { double(TCPSocket, setsockopt: nil, close: nil) }
-  let(:ssl_socket) do double(OpenSSL::SSL::SSLSocket, :sync= => nil, connect: nil,
-                                                      write: nil, flush: nil, read: nil, close: nil)
-  end
+  let(:ssl_socket) { double(OpenSSL::SSL::SSLSocket, :sync= => nil, connect: nil, write: nil, flush: nil, read: nil, close: nil) }
   let(:io_double) { double(select: nil) }
 
   before do
@@ -124,13 +122,14 @@ describe 'APNs' do
       it 'does not mark prior notifications as failed' do
         notifications.each { |n| wait_for_notification_to_deliver(n) }
         fail_notification(notification2)
-        sleep 1
+        wait_for_notification_to_fail(notification2)
+
         notification1.reload
         notification1.delivered.should be_true
       end
 
-      it 'marks notifications following the failed one as retryable' # do
-      #   # Such hacks. Set the poll frequency high enough that we'll only ever feed once.
+      # Unreliable.
+      # it 'marks notifications following the failed one as retryable' do
       #   Rpush.config.push_poll = 1_000_000
       #
       #   notifications.each { |n| wait_for_notification_to_deliver(n) }

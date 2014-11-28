@@ -7,7 +7,7 @@ class Rpush200Updates < ActiveRecord::Migration
       remove_index :rpush_notifications, name: :index_rpush_notifications_multi
     end
 
-    add_index :rpush_notifications, [:processing, :delivered, :failed, :deliver_after], name: 'index_rpush_notifications_multi'
+    add_index :rpush_notifications, [:delivered, :failed], name: 'index_rpush_notifications_multi', where: 'NOT delivered AND NOT failed'
 
     rename_column :rpush_feedback, :app, :app_id
 
@@ -33,10 +33,11 @@ class Rpush200Updates < ActiveRecord::Migration
   end
 
   def self.adapter_name
-    ActiveRecord::Base.configurations[Rails.env]['adapter']
+    env = (defined?(Rails) && Rails.env) ? Rails.env : 'development'
+    ActiveRecord::Base.configurations[env]['adapter']
   end
 
   def self.postgresql?
-    adapter_name =~ /postgresql/
+    adapter_name =~ /postgresql|postgis/
   end
 end

@@ -18,9 +18,9 @@ describe Rpush::Client::ActiveRecord::Apns::Notification do
 
   it "should validate the length of the binary conversion of the notification" do
     notification.device_token = "a" * 64
-    notification.alert = "way too long!" * 100
+    notification.alert = "way too long!" * 200
     notification.valid?.should be_false
-    notification.errors[:base].include?("APN notification cannot be larger than 256 bytes. Try condensing your alert and device attributes.").should be_true
+    notification.errors[:base].include?("APN notification cannot be larger than 2048 bytes. Try condensing your alert and device attributes.").should be_true
   end
 
   it "should default the sound to 'default'" do
@@ -143,6 +143,32 @@ describe Rpush::Client::ActiveRecord::Apns::Notification, 'content-available' do
   end
 end
 
+describe Rpush::Client::ActiveRecord::Apns::Notification, 'url-args' do
+  let(:notification) { Rpush::Client::ActiveRecord::Apns::Notification.new }
+
+  it 'includes url-args in the payload' do
+    notification.url_args = ['url-arg-1']
+    notification.as_json['aps']['url-args'].should eq ['url-arg-1']
+  end
+
+  it 'does not include url-args in the payload if not set' do
+    notification.as_json['aps'].key?('url-args').should be_false
+  end
+end
+
+describe Rpush::Client::ActiveRecord::Apns::Notification, 'category' do
+  let(:notification) { Rpush::Client::ActiveRecord::Apns::Notification.new }
+
+  it 'includes category in the payload' do
+    notification.category = 'INVITE_CATEGORY'
+    notification.as_json['aps']['category'].should eq 'INVITE_CATEGORY'
+  end
+
+  it 'does not include category in the payload if not set' do
+    notification.as_json['aps'].key?('category').should be_false
+  end
+end
+
 describe Rpush::Client::ActiveRecord::Apns::Notification, 'to_binary' do
   let(:notification) { Rpush::Client::ActiveRecord::Apns::Notification.new }
 
@@ -207,7 +233,7 @@ describe Rpush::Client::ActiveRecord::Apns::Notification, "bug #35" do
     end
 
     notification.to_binary(for_validation: true).bytesize.should be > 256
-    notification.payload_size.should be < 256
+    notification.payload.bytesize.should be < 256
     notification.should be_valid
   end
 end

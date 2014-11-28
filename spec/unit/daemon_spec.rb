@@ -22,7 +22,7 @@ describe Rpush::Daemon, "when starting" do
   unless Rpush.jruby?
     it "forks into a daemon if the foreground option is false" do
       Rpush.config.foreground = false
-      Rpush::Daemon.initialize_store
+      Rpush::Daemon.common_init
       Process.should_receive(:daemon)
       Rpush::Daemon.start
     end
@@ -63,6 +63,14 @@ describe Rpush::Daemon, "when starting" do
     Rpush::Daemon.store.should be_kind_of(Rpush::Daemon::Store::ActiveRecord)
   end
 
+  it 'initializes plugins' do
+    plugin = Rpush.plugin(:test)
+    did_init = false
+    plugin.init { did_init = true }
+    Rpush::Daemon.common_init
+    expect(did_init).to be_true
+  end
+
   it 'logs an error if the store cannot be loaded' do
     Rpush.config.client = :foo_bar
     Rpush.logger.should_receive(:error).with(kind_of(LoadError))
@@ -78,7 +86,7 @@ describe Rpush::Daemon, "when starting" do
   it "logs an error if the PID file could not be written" do
     Rpush.config.pid_file = '/rails_root/rpush.pid'
     File.stub(:open).and_raise(Errno::ENOENT)
-    logger.should_receive(:error).with("Failed to write PID to '/rails_root/rpush.pid': #<Errno::ENOENT: No such file or directory>")
+    logger.should_receive(:error).with(%r{Failed to write PID to '/rails_root/rpush\.pid'})
     Rpush::Daemon.start
   end
 

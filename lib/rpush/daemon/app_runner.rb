@@ -1,10 +1,15 @@
+# encoding: UTF-8
+
 module Rpush
   module Daemon
     class AppRunner
+
       extend Reflectable
       include Reflectable
       include Loggable
+      extend Loggable
       include StringHelpers
+      extend StringHelpers
 
       @runners = {}
 
@@ -22,8 +27,10 @@ module Rpush
       end
 
       def self.start_app(app)
+        Rpush.logger.info("[#{app.name}] Starting #{pluralize(app.connections, 'dispatcher')}... ", true)
         @runners[app.id] = new(app)
         @runners[app.id].start
+        puts ANSI.green{ '✔' } if Rpush.config.foreground
       rescue StandardError => e
         @runners.delete(app.id)
         Rpush.logger.error("[#{app.name}] Exception raised during startup. Notifications will not be delivered for this app.")
@@ -32,7 +39,15 @@ module Rpush
       end
 
       def self.stop_app(app_id)
-        @runners.delete(app_id).stop
+        runner = @runners.delete(app_id)
+        if runner
+          runner.stop
+          log_info("[#{runner.app.name}] Stopped.")
+        end
+      end
+
+      def self.app_with_id(app_id)
+        @runners[app_id].app
       end
 
       def self.app_running?(app)

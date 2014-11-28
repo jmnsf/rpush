@@ -32,7 +32,7 @@ module Rpush
 end
 
 describe Rpush::Daemon::AppRunner, 'enqueue' do
-  let(:app) { double(id: 1) }
+  let(:app) { double(id: 1, name: 'Test', connections: 1) }
   let(:notification) { double(app_id: 1) }
   let(:runner) { double(Rpush::Daemon::AppRunner, enqueue: nil, start: nil, stop: nil) }
   let(:logger) { double(Rpush::Logger, error: nil, info: nil) }
@@ -53,7 +53,7 @@ describe Rpush::Daemon::AppRunner, 'enqueue' do
 
   it 'starts the app if a runner does not exist' do
     notification = double(app_id: 3)
-    new_app = double(Rpush::App, id: 3)
+    new_app = double(Rpush::App, id: 3, name: 'NewApp', connections: 1)
     Rpush::Daemon.store = double(app: new_app)
     Rpush::Daemon::AppRunner.enqueue([notification])
     Rpush::Daemon::AppRunner.app_running?(new_app).should be_true
@@ -61,7 +61,7 @@ describe Rpush::Daemon::AppRunner, 'enqueue' do
 end
 
 describe Rpush::Daemon::AppRunner, 'start_app' do
-  let(:app) { double(id: 1, name: 'test') }
+  let(:app) { double(id: 1, name: 'test', connections: 1) }
   let(:runner) { double(Rpush::Daemon::AppRunner, enqueue: nil, start: nil, stop: nil) }
   let(:logger) { double(Rpush::Logger, error: nil, info: nil) }
 
@@ -78,8 +78,9 @@ describe Rpush::Daemon::AppRunner, 'start_app' do
 end
 
 describe Rpush::Daemon::AppRunner, 'debug' do
-  let(:app) do double(Rpush::AppRunnerSpecService::App, id: 1, name: 'test', connections: 1,
-                                                        environment: 'development', certificate: TEST_CERT, service_name: 'app_runner_spec_service')
+  let(:app) do
+    double(Rpush::AppRunnerSpecService::App, id: 1, name: 'test', connections: 1,
+      environment: 'development', certificate: TEST_CERT, service_name: 'app_runner_spec_service')
   end
   let(:logger) { double(Rpush::Logger, info: nil) }
   let(:store) { double(all_apps: [app], release_connection: nil) }
@@ -99,9 +100,9 @@ describe Rpush::Daemon::AppRunner, 'debug' do
 end
 
 describe Rpush::Daemon::AppRunner do
-  let(:app) do double(Rpush::AppRunnerSpecService::App, environment: :sandbox,
-                                                        connections: 1, service_name: 'app_runner_spec_service',
-                                                        name: 'test')
+  let(:app) do
+    double(Rpush::AppRunnerSpecService::App, environment: :sandbox,
+      connections: 1, service_name: 'app_runner_spec_service', name: 'test')
   end
   let(:runner) { Rpush::Daemon::AppRunner.new(app) }
   let(:logger) { double(Rpush::Logger, info: nil) }

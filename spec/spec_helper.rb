@@ -4,7 +4,7 @@ client = (ENV['CLIENT'] || :active_record).to_sym
 require 'bundler/setup'
 Bundler.require(:default)
 
-unless ENV['TRAVIS'] && ENV['QUALITY'] == 'false'
+if !ENV['TRAVIS'] || (ENV['TRAVIS'] && ENV['QUALITY'] == 'true')
   begin
     require './spec/support/simplecov_helper'
     include SimpleCovHelper
@@ -23,11 +23,10 @@ require 'rpush/daemon/store/redis'
 
 require 'support/active_record_setup'
 
-RAILS_ROOT = '/tmp/rails_root'
+RPUSH_ROOT = '/tmp/rails_root'
 
 Rpush.configure do |config|
   config.client = client
-  config.log_dir = RAILS_ROOT
 end
 
 RPUSH_CLIENT = Rpush.config.client
@@ -47,11 +46,14 @@ def after_example_cleanup
     Rpush.config.set_defaults if Rpush.config.is_a?(Rpush::Configuration)
     Rpush.config.client = RPUSH_CLIENT
   end
+  Rpush.plugins.values.each(&:unload)
+  Rpush.instance_variable_set('@plugins', {})
 end
 
 RSpec.configure do |config|
   config.before(:each) do
-    Rails.stub(root: RAILS_ROOT)
+    Rpush.config.log_file = File.join(RPUSH_ROOT, 'rpush.log')
+    Rpush.stub(root: RPUSH_ROOT)
   end
 
   config.after(:each) do

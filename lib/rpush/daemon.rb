@@ -1,3 +1,5 @@
+# encoding: UTF-8
+
 require 'thread'
 require 'socket'
 require 'pathname'
@@ -6,7 +8,6 @@ require 'net/http/persistent'
 
 require 'rpush/daemon/errors'
 require 'rpush/daemon/constants'
-require 'rpush/daemon/reflectable'
 require 'rpush/daemon/loggable'
 require 'rpush/daemon/string_helpers'
 require 'rpush/daemon/interruptible_sleep'
@@ -46,19 +47,23 @@ require 'rpush/daemon/adm'
 
 module Rpush
   module Daemon
+
     class << self
       attr_accessor :store
     end
 
     def self.start
-      SignalHandler.start
       Process.daemon if daemonize?
-      initialize_store
       write_pid_file
+      SignalHandler.start
+      common_init
       Synchronizer.sync
 
       # No further store connections will be made from this thread.
       store.release_connection
+
+      Rpush.logger.info('Rpush operational.')
+      show_welcome_if_needed
 
       # Blocking call, returns after Feeder.stop is called from another thread.
       Feeder.start
@@ -68,12 +73,19 @@ module Rpush
     end
 
     def self.shutdown
-      puts "\nShutting down..."
+      if Rpush.config.foreground
+        # Eat the '^C'
+        STDOUT.write("\b\b")
+        STDOUT.flush
+      end
+
+      Rpush.logger.info('Shutting down... ', true)
 
       shutdown_lock.synchronize do
         Feeder.stop
         AppRunner.stop
         delete_pid_file
+        puts ANSI.green{ '✔' } if Rpush.config.foreground
       end
     end
 
@@ -83,7 +95,14 @@ module Rpush
       @shutdown_lock
     end
 
-    def self.initialize_store
+    def self.common_init
+      init_store
+      init_plugins
+    end
+
+    protected
+
+    def self.init_store
       return if store
       begin
         name = Rpush.config.client.to_s
@@ -96,7 +115,12 @@ module Rpush
       end
     end
 
-    protected
+    def self.init_plugins
+      Rpush.plugins.each do |name, plugin|
+        plugin.init_block.call()
+        Rpush.logger.info("[plugin:#{name}] Loaded.")
+      end
+    end
 
     def self.daemonize?
       !(Rpush.config.push || Rpush.config.foreground || Rpush.config.embedded || Rpush.jruby?)
@@ -105,6 +129,7 @@ module Rpush
     def self.write_pid_file
       unless Rpush.config.pid_file.blank?
         begin
+          FileUtils.mkdir_p(File.dirname(Rpush.config.pid_file))
           File.open(Rpush.config.pid_file, 'w') { |f| f.puts Process.pid }
         rescue SystemCallError => e
           Rpush.logger.error("Failed to write PID to '#{Rpush.config.pid_file}': #{e.inspect}")
@@ -115,6 +140,18 @@ module Rpush
     def self.delete_pid_file
       pid_file = Rpush.config.pid_file
       File.delete(pid_file) if !pid_file.blank? && File.exist?(pid_file)
+    end
+
+    def self.show_welcome_if_needed
+      if Rpush::Daemon::AppRunner.app_ids.count == 0
+        puts <<-EOS
+
+* #{ANSI.green{'Is this your first time using Rpush?'}}
+  You need to create an App before you can start using Rpush.
+  Please refer to the documentation at https://github.com/rpush/rpush
+
+        EOS
+      end
     end
   end
 end

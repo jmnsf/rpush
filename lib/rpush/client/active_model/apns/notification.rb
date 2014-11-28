@@ -38,7 +38,7 @@ module Rpush
             self.data = (data || {}).merge(CONTENT_AVAILABLE_KEY => true)
           end
 
-          def as_json
+          def as_json # rubocop:disable Metrics/PerceivedComplexity
             json = ActiveSupport::OrderedHash.new
 
             if data && data.key?(MDM_KEY)
@@ -48,6 +48,8 @@ module Rpush
               json['aps']['alert'] = alert if alert
               json['aps']['badge'] = badge if badge
               json['aps']['sound'] = sound if sound
+              json['aps']['category'] = category if category
+              json['aps']['url-args'] = url_args if url_args
 
               if data && data[CONTENT_AVAILABLE_KEY]
                 json['aps']['content-available'] = 1
@@ -63,10 +65,11 @@ module Rpush
           end
 
           def to_binary(options = {})
+            frame_payload = payload
             frame_id = options[:for_validation] ? 0 : id
             frame = ""
             frame << [1, 32, device_token].pack("cnH*")
-            frame << [2, payload.bytesize, payload].pack("cna*")
+            frame << [2, frame_payload.bytesize, frame_payload].pack("cna*")
             frame << [3, 4, frame_id].pack("cnN")
             frame << [4, 4, expiry || APNS_DEFAULT_EXPIRY].pack("cnN")
             frame << [5, 1, priority_for_frame].pack("cnc")

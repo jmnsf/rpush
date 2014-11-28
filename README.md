@@ -1,21 +1,27 @@
-[![Build Status](https://secure.travis-ci.org/rpush/rpush.png?branch=master)](http://travis-ci.org/rpush/rpush)
-[![Code Climate](https://codeclimate.com/github/rpush/rpush.png)](https://codeclimate.com/github/rpush/rpush)
-[![Code Coverage](https://codeclimate.com/github/rpush/rpush/coverage.png)](https://codeclimate.com/github/rpush/rpush)
-[![Gem Version](https://badge.fury.io/rb/rpush.png)](http://badge.fury.io/rb/rpush)
+[![Build Status](https://secure.travis-ci.org/rpush/rpush.svg?branch=master)](http://travis-ci.org/rpush/rpush)
+[![Code Climate](https://codeclimate.com/github/rpush/rpush/badges/gpa.svg)](https://codeclimate.com/github/rpush/rpush)
+[![Test Coverage](https://codeclimate.com/github/rpush/rpush/badges/coverage.svg)](https://codeclimate.com/github/rpush/rpush)
+[![Gem Version](https://badge.fury.io/rb/rpush.svg)](http://badge.fury.io/rb/rpush)
 
 <img src="https://raw.github.com/rpush/rpush/master/logo.png" align="right" width="200px" />
 
 ### Rpush. The push notification service for Ruby.
 
-* Supports:
-  * **Apple Push Notification Service**
-  * **Google Cloud Messaging**
-  * **Amazon Device Messaging**
-  * **Windows Phone Push Notification Service**.
-* Seamless Rails (3, 4) integration.
-* Scalable - choose the number of persistent connections for each app.
-* Designed for uptime - signal -HUP to add, update apps.
-* Run as a daemon or inside an [existing processs](https://github.com/rpush/rpush/wiki/Embedding-API).
+* Supported services:
+  * [**Apple Push Notification Service**](#apple-push-notification-service)
+    * Including Safari Push Notifications.
+  * [**Google Cloud Messaging**](#google-cloud-messaging)
+  * [**Amazon Device Messaging**](#amazon-device-messaging)
+  * [**Windows Phone Push Notification Service**](#windows-phone-notification-service)
+
+* Supported storage backends:
+  * [**ActiveRecord**](https://github.com/rpush/rpush/wiki/Using-ActiveRecord)
+  * [**Redis**](https://github.com/rpush/rpush/wiki/Using-Redis)
+
+* Optional Rails integration (version 3 & 4).
+* Scales vertically (threading) and horizontally (multiple processes).
+* Designed for uptime - new apps are loaded automatically, signal `HUP` to update running apps.
+* Run as a daemon or inside an [existing process](https://github.com/rpush/rpush/wiki/Embedding-API).
 * Use in a scheduler for low-workload deployments ([Push API](https://github.com/rpush/rpush/wiki/Push-API)).
 * Hooks for fine-grained instrumentation and error handling ([Reflection API](https://github.com/rpush/rpush/wiki/Reflection-API)).
 * Works with MRI, JRuby and Rubinius.
@@ -29,11 +35,11 @@ Add it to your Gemfile:
 gem 'rpush'
 ```
 
-Generate the migrations, rpush.rb and migrate:
+Initialize Rpush into your project. Rails will be detected automatically.
 
 ```
-rails g rpush
-rake db:migrate
+cd /path/to/project
+rpush init
 ```
 
 ### Create an App & Notification
@@ -55,11 +61,13 @@ app.save!
 ```ruby
 n = Rpush::Apns::Notification.new
 n.app = Rpush::Apns::App.find_by_name("ios_app")
-n.device_token = "..."
+n.device_token = "..." # 64-character hex string
 n.alert = "hi mom!"
 n.data = { foo: :bar }
 n.save!
 ```
+
+The `url_args` attribute is available for Safari Push Notifications.
 
 You should also implement the [ssl_certificate_will_expire](https://github.com/rpush/rpush/wiki/Reflection-API) reflection to monitor when your certificate is due to expire.
 
@@ -118,39 +126,62 @@ app.save!
 n = Rpush::Wpns::Notification.new
 n.app = Rpush::Wpns::App.find_by_name("windows_phone_app")
 n.uri = "http://..."
-n.alert = "..."
+n.data = {title:"MyApp", body:"Hello world", param:"user_param1"}
 n.save!
 ```
 
-### Starting Rpush
+### Running Rpush
 
-As a daemon (recommended):
+It is recommended to run Rpush as a separate process in most cases, though embedding and manual modes are provided for low-workload environments.
 
-    cd /path/to/rails/app
-    rpush <Rails environment> [options]
+#### As a daemon (recommended):
 
-Inside an existing process (see [Embedding API](https://github.com/rpush/rpush/wiki/Embedding-API)):
-
-```ruby
-Rpush.embed
+```
+cd /path/to/project
+rpush start
 ```
 
-In a scheduler (see [Push API](https://github.com/rpush/rpush/wiki/Push-API)):
+See `rpush help` for all available commands and options.
+
+#### One-off, manual
+
+On the command-line:
+
+```
+rpush push
+```
+
+In your code:
 
 ```ruby
 Rpush.push
 Rpush.apns_feedback
 ```
 
-See [Configuration](https://github.com/rpush/rpush/wiki/Configuration) for a list of options, or run `rpush --help`.
+See [Push API](https://github.com/rpush/rpush/wiki/Push-API) for more details.
+
+#### Embedded inside an existing process
+
+```ruby
+# Call this during startup of your application, for example, by adding it to the end of config/rpush.rb
+Rpush.embed
+```
+
+See [Embedding API](https://github.com/rpush/rpush/wiki/Embedding-API) for more details.
+
+### Configuration
+
+See [Configuration](https://github.com/rpush/rpush/wiki/Configuration) for a list of options.
 
 ### Updating Rpush
 
-After updating you should run `rails g rpush` to check for any new migrations.
+You should run `rpush init` after upgrading Rpush to check for configuration and migration changes.
 
 ### Wiki
 
 ### General
+* [Using Redis](https://github.com/rpush/rpush/wiki/Using-Redis)
+* [Using ActiveRecord](https://github.com/rpush/rpush/wiki/Using-ActiveRecord)
 * [Configuration](https://github.com/rpush/rpush/wiki/Configuration)
 * [Moving from Rapns](https://github.com/rpush/rpush/wiki/Moving-from-Rapns-to-Rpush)
 * [Deploying to Heroku](https://github.com/rpush/rpush/wiki/Heroku)
@@ -176,8 +207,6 @@ After updating you should run `rails g rpush` to check for any new migrations.
 
 ### Contributing
 
-Fork as usual and go crazy!
-
 When running specs, please note that the ActiveRecord adapter can be changed by setting the `ADAPTER` environment variable. For example: `ADAPTER=postgresql rake`.
 
 Available adapters for testing are `mysql`, `mysql2` and `postgresql`.
@@ -185,3 +214,5 @@ Available adapters for testing are `mysql`, `mysql2` and `postgresql`.
 Note that the database username is changed at runtime to be the currently logged in user's name. So if you're testing
 with mysql and you're using a user named 'bob', you will need to grant a mysql user 'bob' access to the 'rpush_test'
 mysql database.
+
+To switch between ActiveRecord and Redis, set the `CLIENT` environment variable to either `:active_record` or `:redis`.
