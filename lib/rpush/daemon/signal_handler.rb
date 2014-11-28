@@ -27,6 +27,9 @@ module Rpush
           # This should never happen, but hey, who knows?
           Rpush.logger.warn "Caught unknown signal: #{signal}."
         end
+      rescue => e
+        Rpush.logger.error("Error raised when handling signal '#{signal}'")
+        Rpush.logger.error(e)
       end
 
       def self.handle_shutdown_signal
