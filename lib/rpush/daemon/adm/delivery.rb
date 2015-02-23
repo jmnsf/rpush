@@ -40,6 +40,9 @@ module Rpush
           handle_rate_limited(error)
         rescue Rpush::RetryableError => error
           handle_retryable(error)
+        rescue SocketError => error
+          mark_retryable(@notification, Time.now + 10.seconds, error)
+          raise
         rescue StandardError => error
           mark_failed(error)
           raise
@@ -120,8 +123,11 @@ module Rpush
 
           return unless response_body.key?('reason')
 
-          log_warn("bad_request: #{current_registration_id} (#{response_body['reason']})")
-          @failed_registration_ids[current_registration_id] = response_body['reason']
+          reason = response_body['reason']
+          log_warn("bad_request: #{current_registration_id} (#{reason})")
+          @failed_registration_ids[current_registration_id] = reason
+
+          reflect(:adm_failed_to_recipient, @notification, current_registration_id, reason)
         end
 
         def unauthorized(response)
@@ -145,7 +151,7 @@ module Rpush
         end
 
         def create_new_notification(response, registration_ids)
-          attrs = @notification.attributes.slice('app_id', 'collapse_key', 'delay_while_idle')
+          attrs = { 'app_id' => @notification.app_id, 'collapse_key' => @notification.collapse_key, 'delay_while_idle' => @notification.delay_while_idle }
           Rpush::Daemon.store.create_adm_notification(attrs, @notification.data, registration_ids, deliver_after_header(response), @notification.app)
         end
 
@@ -173,7 +179,7 @@ module Rpush
         end
 
         def retry_message
-          "Notification #{@notification.id} will be retired after #{@notification.deliver_after.strftime("%Y-%m-%d %H:%M:%S")} (retry #{@notification.retries})."
+          "Notification #{@notification.id} will be retired after #{@notification.deliver_after.strftime('%Y-%m-%d %H:%M:%S')} (retry #{@notification.retries})."
         end
 
         def do_post(registration_id)

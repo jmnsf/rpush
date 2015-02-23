@@ -1,3 +1,5 @@
+# encoding: UTF-8
+
 module Rpush
   module Daemon
     module Apns
@@ -17,29 +19,35 @@ module Rpush
           @host, @port = HOSTS[@app.environment.to_sym]
           @certificate = app.certificate
           @password = app.password
-          @interruptible_sleep = InterruptibleSleep.new(Rpush.config.feedback_poll)
+          @interruptible_sleep = InterruptibleSleep.new
         end
 
         def start
           return if Rpush.config.push
-          log_info("APNs Feedback Receiver started.")
-          @interruptible_sleep.start
+          Rpush.logger.info("[#{@app.name}] Starting feedback receiver... ", true)
 
           @thread = Thread.new do
             loop do
               break if @stop
               check_for_feedback
-              @interruptible_sleep.sleep
+              @interruptible_sleep.sleep(Rpush.config.apns.feedback_receiver.frequency)
             end
 
             Rpush::Daemon.store.release_connection
           end
+
+          puts ANSI.green { '✔' } if Rpush.config.foreground
         end
 
         def stop
           @stop = true
           @interruptible_sleep.stop
           @thread.join if @thread
+        rescue StandardError => e
+          log_error(e)
+          reflect(:error, e)
+        ensure
+          @thread = nil
         end
 
         def check_for_feedback
@@ -70,7 +78,7 @@ module Rpush
         end
 
         def create_feedback(failed_at, device_token)
-          formatted_failed_at = failed_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+          formatted_failed_at = failed_at.strftime('%Y-%m-%d %H:%M:%S UTC')
           log_info("[FeedbackReceiver] Delivery failed at #{formatted_failed_at} for #{device_token}.")
 
           feedback = Rpush::Daemon.store.create_apns_feedback(failed_at, device_token, @app)

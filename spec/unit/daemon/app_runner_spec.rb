@@ -32,76 +32,79 @@ module Rpush
 end
 
 describe Rpush::Daemon::AppRunner, 'enqueue' do
-  let(:app) { double(id: 1) }
+  let(:app) { double(id: 1, name: 'Test', connections: 1) }
   let(:notification) { double(app_id: 1) }
-  let(:runner) { double(Rpush::Daemon::AppRunner, enqueue: nil, start: nil, stop: nil) }
+  let(:runner) { double(Rpush::Daemon::AppRunner, enqueue: nil, start_dispatchers: nil, start_loops: nil, stop: nil) }
   let(:logger) { double(Rpush::Logger, error: nil, info: nil) }
 
   before do
-    Rpush.stub(logger: logger)
-    Rpush::Daemon::ProcTitle.stub(:update)
-    Rpush::Daemon::AppRunner.stub(new: runner)
+    allow(Rpush).to receive_messages(logger: logger)
+    allow(Rpush::Daemon::ProcTitle).to receive(:update)
+    allow(Rpush::Daemon::AppRunner).to receive_messages(new: runner)
     Rpush::Daemon::AppRunner.start_app(app)
   end
 
   after { Rpush::Daemon::AppRunner.stop }
 
   it 'enqueues notifications on the runner' do
-    runner.should_receive(:enqueue).with([notification])
+    expect(runner).to receive(:enqueue).with([notification])
     Rpush::Daemon::AppRunner.enqueue([notification])
   end
 
   it 'starts the app if a runner does not exist' do
     notification = double(app_id: 3)
-    new_app = double(Rpush::App, id: 3)
+    new_app = double(Rpush::App, id: 3, name: 'NewApp', connections: 1)
     Rpush::Daemon.store = double(app: new_app)
     Rpush::Daemon::AppRunner.enqueue([notification])
-    Rpush::Daemon::AppRunner.app_running?(new_app).should be_true
+    expect(Rpush::Daemon::AppRunner.app_running?(new_app)).to eq(true)
   end
 end
 
 describe Rpush::Daemon::AppRunner, 'start_app' do
-  let(:app) { double(id: 1, name: 'test') }
-  let(:runner) { double(Rpush::Daemon::AppRunner, enqueue: nil, start: nil, stop: nil) }
+  let(:app) { double(id: 1, name: 'test', connections: 1) }
+  let(:runner) { double(Rpush::Daemon::AppRunner, enqueue: nil, start_dispatchers: nil, stop: nil) }
   let(:logger) { double(Rpush::Logger, error: nil, info: nil) }
 
   before do
-    Rpush.stub(logger: logger)
+    allow(Rpush).to receive_messages(logger: logger)
   end
 
   it 'logs an error if the runner could not be started' do
-    Rpush::Daemon::AppRunner.should_receive(:new).with(app).and_return(runner)
-    runner.stub(:start).and_raise(StandardError)
-    Rpush.logger.should_receive(:error)
+    expect(Rpush::Daemon::AppRunner).to receive(:new).with(app).and_return(runner)
+    allow(runner).to receive(:start_dispatchers).and_raise(StandardError)
+    expect(Rpush.logger).to receive(:error)
     Rpush::Daemon::AppRunner.start_app(app)
   end
 end
 
 describe Rpush::Daemon::AppRunner, 'debug' do
-  let(:app) do double(Rpush::AppRunnerSpecService::App, id: 1, name: 'test', connections: 1,
-                                                        environment: 'development', certificate: TEST_CERT, service_name: 'app_runner_spec_service')
+  let(:app) do
+    double(Rpush::AppRunnerSpecService::App, id: 1, name: 'test', connections: 1,
+                                             environment: 'development', certificate: TEST_CERT,
+                                             service_name: 'app_runner_spec_service')
   end
   let(:logger) { double(Rpush::Logger, info: nil) }
   let(:store) { double(all_apps: [app], release_connection: nil) }
 
   before do
-    Rpush::Daemon.stub(config: {}, store: store)
-    Rpush.stub(logger: logger)
+    allow(Rpush::Daemon).to receive_messages(config: {}, store: store)
+    allow(Rpush).to receive_messages(logger: logger)
     Rpush::Daemon::AppRunner.start_app(app)
   end
 
   after { Rpush::Daemon::AppRunner.stop_app(app.id) }
 
   it 'prints debug app states to the log' do
-    Rpush.logger.should_receive(:info).with(kind_of(String))
+    expect(Rpush.logger).to receive(:info).with(kind_of(String))
     Rpush::Daemon::AppRunner.debug
   end
 end
 
 describe Rpush::Daemon::AppRunner do
-  let(:app) do double(Rpush::AppRunnerSpecService::App, environment: :sandbox,
-                                                        connections: 1, service_name: 'app_runner_spec_service',
-                                                        name: 'test')
+  let(:app) do
+    double(Rpush::AppRunnerSpecService::App, environment: :sandbox,
+                                             connections: 1, service_name: 'app_runner_spec_service',
+                                             name: 'test')
   end
   let(:runner) { Rpush::Daemon::AppRunner.new(app) }
   let(:logger) { double(Rpush::Logger, info: nil) }
@@ -111,28 +114,28 @@ describe Rpush::Daemon::AppRunner do
   let(:store) { double(Rpush::Daemon::Store::ActiveRecord, release_connection: nil) }
 
   before do
-    Rpush::Daemon::DispatcherLoop.stub(new: dispatcher_loop)
-    Rpush::Daemon.stub(store: store)
-    Rpush::Daemon::AppRunnerSpecService::ServiceLoop.stub(new: service_loop)
-    Queue.stub(new: queue)
-    Rpush.stub(logger: logger)
+    allow(Rpush::Daemon::DispatcherLoop).to receive_messages(new: dispatcher_loop)
+    allow(Rpush::Daemon).to receive_messages(store: store)
+    allow(Rpush::Daemon::AppRunnerSpecService::ServiceLoop).to receive_messages(new: service_loop)
+    allow(Queue).to receive_messages(new: queue)
+    allow(Rpush).to receive_messages(logger: logger)
   end
 
   describe 'start' do
     it 'starts a delivery dispatcher for each connection' do
-      app.stub(connections: 2)
-      runner.start
-      runner.num_dispatcher_loops.should eq 2
+      allow(app).to receive_messages(connections: 2)
+      runner.start_dispatchers
+      expect(runner.num_dispatcher_loops).to eq 2
     end
 
     it 'starts the dispatcher loop' do
-      dispatcher_loop.should_receive(:start)
-      runner.start
+      expect(dispatcher_loop).to receive(:start)
+      runner.start_dispatchers
     end
 
     it 'starts the loops' do
-      service_loop.should_receive(:start)
-      runner.start
+      expect(service_loop).to receive(:start)
+      runner.start_loops
     end
   end
 
@@ -140,27 +143,27 @@ describe Rpush::Daemon::AppRunner do
     let(:notification) { double }
 
     it 'enqueues the batch' do
-      queue.should_receive(:push) do |queue_payload|
-        queue_payload.notification.should eq notification
-        queue_payload.batch.should_not be_nil
+      expect(queue).to receive(:push) do |queue_payload|
+        expect(queue_payload.notification).to eq notification
+        expect(queue_payload.batch).not_to be_nil
       end
       runner.enqueue([notification])
     end
 
     it 'reflects the notification has been enqueued' do
-      runner.should_receive(:reflect).with(:notification_enqueued, notification)
+      expect(runner).to receive(:reflect).with(:notification_enqueued, notification)
       runner.enqueue([notification])
     end
 
     describe 'a service that batches deliveries' do
       before do
-        runner.send(:service).stub(batch_deliveries?: true)
+        allow(runner.send(:service)).to receive_messages(batch_deliveries?: true)
       end
 
       describe '1 notification with more than one dispatcher loop' do
         it 'does not raise ArgumentError: invalid slice size' do
           # https://github.com/rpush/rpush/issues/57
-          runner.stub(:num_dispatcher_loops).and_return(2)
+          allow(runner).to receive(:num_dispatcher_loops).and_return(2)
           runner.enqueue([notification])
         end
       end
@@ -168,15 +171,18 @@ describe Rpush::Daemon::AppRunner do
   end
 
   describe 'stop' do
-    before { runner.start }
+    before do
+      runner.start_dispatchers
+      runner.start_loops
+    end
 
     it 'stops the delivery dispatchers' do
-      dispatcher_loop.should_receive(:stop)
+      expect(dispatcher_loop).to receive(:stop)
       runner.stop
     end
 
     it 'stop the loops' do
-      service_loop.should_receive(:stop)
+      expect(service_loop).to receive(:stop)
       runner.stop
     end
   end

@@ -1,10 +1,9 @@
 ENV['RAILS_ENV'] = 'test'
-client = (ENV['CLIENT'] || :active_record).to_sym
+def client
+  (ENV['CLIENT'] || :active_record).to_sym
+end
 
-require 'bundler/setup'
-Bundler.require(:default)
-
-unless ENV['TRAVIS'] && ENV['QUALITY'] == 'false'
+if !ENV['TRAVIS'] || (ENV['TRAVIS'] && ENV['QUALITY'] == 'true')
   begin
     require './spec/support/simplecov_helper'
     include SimpleCovHelper
@@ -14,6 +13,12 @@ unless ENV['TRAVIS'] && ENV['QUALITY'] == 'false'
   end
 end
 
+require 'timecop'
+
+if defined? JRUBY_VERSION
+  require 'activerecord-jdbc-adapter'
+end
+
 require 'rpush'
 require 'rpush/daemon'
 require 'rpush/client/redis'
@@ -21,20 +26,28 @@ require 'rpush/client/active_record'
 require 'rpush/daemon/store/active_record'
 require 'rpush/daemon/store/redis'
 
-require 'support/active_record_setup'
+def active_record?
+  client == :active_record
+end
 
-RAILS_ROOT = '/tmp/rails_root'
+def redis?
+  client == :redis
+end
+
+def mongoid?
+  client == :mongoid
+end
+
+require 'support/mongoid_setup' if mongoid?
+require 'support/active_record_setup' if active_record?
+
+RPUSH_ROOT = '/tmp/rails_root'
 
 Rpush.configure do |config|
   config.client = client
-  config.log_dir = RAILS_ROOT
 end
 
 RPUSH_CLIENT = Rpush.config.client
-
-def active_record?
-  Rpush.config.client == :active_record
-end
 
 path = File.join(File.dirname(__FILE__), 'support')
 TEST_CERT = File.read(File.join(path, 'cert_without_password.pem'))
@@ -44,14 +57,17 @@ def after_example_cleanup
   Rpush.logger = nil
   Rpush::Daemon.store = nil
   Rpush::Deprecation.muted do
-    Rpush.config.set_defaults if Rpush.config.is_a?(Rpush::Configuration)
+    Rpush.config = nil
     Rpush.config.client = RPUSH_CLIENT
   end
+  Rpush.plugins.values.each(&:unload)
+  Rpush.instance_variable_set('@plugins', {})
 end
 
 RSpec.configure do |config|
   config.before(:each) do
-    Rails.stub(root: RAILS_ROOT)
+    Rpush.config.log_file = File.join(RPUSH_ROOT, 'rpush.log')
+    allow(Rpush).to receive(:root) { RPUSH_ROOT }
   end
 
   config.after(:each) do

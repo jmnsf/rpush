@@ -1,46 +1,64 @@
+require 'pathname'
+
 module Rpush
-  def self.config
-    @config ||= Rpush::Configuration.new
-  end
+  class << self
+    attr_writer :config
 
-  def self.configure
-    if block_given?
+    def config
+      @config ||= Rpush::Configuration.new
+    end
+
+    def configure
+      return unless block_given?
       yield config
-      initialize_client
+      config.initialize_client
     end
   end
 
-  def self.initialize_client
-    return if @client_initialized
-    require "rpush/client/#{config.client}"
-    client_module = Rpush::Client.const_get(config.client.to_s.camelize)
-    Rpush.send(:include, client_module)
+  CURRENT_ATTRS = [:push_poll, :embedded, :pid_file, :batch_size, :push, :client, :logger, :log_file, :foreground, :log_level, :plugin, :apns]
+  DEPRECATED_ATTRS = [:feedback_poll]
+  CONFIG_ATTRS = CURRENT_ATTRS + DEPRECATED_ATTRS
 
-    [:Apns, :Gcm, :Wpns, :Adm].each do |service|
-      Rpush.const_set(service, client_module.const_get(service))
+  class ConfigurationError < StandardError; end
+  class ConfigurationWithoutDefaults < Struct.new(*CONFIG_ATTRS); end # rubocop:disable Style/StructInheritance
+
+  class ApnsFeedbackReceiverConfiguration < Struct.new(:frequency, :enabled) # rubocop:disable Style/StructInheritance
+    def initialize
+      super
+      self.enabled = true
+      self.frequency = 60
     end
-
-    @client_initialized = true
   end
 
-  CONFIG_ATTRS = [:foreground, :push_poll, :feedback_poll, :embedded,
-                  :check_for_errors, :pid_file, :batch_size, :push, :client, :logger,
-                  :batch_storage_updates, :log_dir, :environment]
-
-  class ConfigurationWithoutDefaults < Struct.new(*CONFIG_ATTRS)
+  class ApnsConfiguration < Struct.new(:feedback_receiver) # rubocop:disable Style/StructInheritance
+    def initialize
+      super
+      self.feedback_receiver = ApnsFeedbackReceiverConfiguration.new
+    end
   end
 
-  class Configuration < Struct.new(*CONFIG_ATTRS)
+  class Configuration < Struct.new(*CONFIG_ATTRS) # rubocop:disable Style/StructInheritance
     include Deprecatable
 
-    deprecated(:batch_storage_updates=, '2.1.0', 'Updates are now always batched by the storage backends.')
-    deprecated(:check_for_errors=, '2.1.0', 'APNs error detection is now performed asynchronously and does not require pauses.')
-
-    delegate :redis_options, :redis_options=, to: :Modis
+    delegate :redis_options, to: '::Modis'
 
     def initialize
       super
-      set_defaults
+
+      self.push_poll = 2
+      self.batch_size = 100
+      self.logger = nil
+      self.log_file = 'log/rpush.log'
+      self.pid_file = 'tmp/rpush.pid'
+      self.log_level = (defined?(Rails) && Rails.logger) ? Rails.logger.level : ::Logger::Severity::DEBUG
+      self.plugin = OpenStruct.new
+      self.foreground = false
+
+      self.apns = ApnsConfiguration.new
+
+      # Internal options.
+      self.embedded = false
+      self.push = false
     end
 
     def update(other)
@@ -52,7 +70,15 @@ module Rpush
 
     def pid_file=(path)
       if path && !Pathname.new(path).absolute?
-        super(File.join(Rails.root, path))
+        super(File.join(Rpush.root, path))
+      else
+        super
+      end
+    end
+
+    def log_file=(path)
+      if path && !Pathname.new(path).absolute?
+        super(File.join(Rpush.root, path))
       else
         super
       end
@@ -62,35 +88,33 @@ module Rpush
       super(logger)
     end
 
-    def foreground=(bool)
-      if Rpush.jruby?
-        # The JVM does not support fork().
-        super(true)
-      else
-        super
-      end
+    def client=(client)
+      super
+      initialize_client
     end
 
-    def set_defaults
-      if Rpush.jruby?
-        # The JVM does not support fork().
-        self.foreground = true
-      else
-        self.foreground = false
+    def redis_options=(options)
+      Modis.redis_options = options if client == :redis
+    end
+
+    def feedback_poll=(frequency)
+      apns.feedback_receiver.frequency = frequency
+    end
+    deprecated(:feedback_poll=, '2.5.0', 'Please use apns.feedback_receiver.frequency= instead.')
+
+    def initialize_client
+      return if @client_initialized
+      raise ConfigurationError, 'Rpush.config.client is not set.' unless client
+      require "rpush/client/#{client}"
+
+      client_module = Rpush::Client.const_get(client.to_s.camelize)
+      Rpush.send(:include, client_module) unless Rpush.ancestors.include?(client_module)
+
+      [:Apns, :Gcm, :Wpns, :Adm].each do |service|
+        Rpush.const_set(service, client_module.const_get(service)) unless Rpush.const_defined?(service)
       end
 
-      self.push_poll = 2
-      self.feedback_poll = 60
-      self.batch_size = 100
-      self.pid_file = nil
-      self.client = :active_record
-      self.logger = nil
-      self.log_dir = Rails.root
-
-      # Internal options.
-      self.embedded = false
-      self.push = false
-      self.environment = Rails.env
+      @client_initialized = true
     end
   end
 end

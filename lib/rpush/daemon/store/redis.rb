@@ -49,7 +49,7 @@ module Rpush
         end
 
         def mark_ids_failed(ids, code, description, time)
-          ids.each { |id| mark_failed(Rpush::Client::Redis::Apns::Notification.find(id), code, description, time) }
+          ids.each { |id| mark_failed(Rpush::Client::Redis::Notification.find(id), code, description, time) }
         end
 
         def mark_retryable(notification, deliver_after, opts = {})
@@ -75,7 +75,7 @@ module Rpush
         end
 
         def mark_ids_retryable(ids, deliver_after)
-          ids.each { |id| mark_retryable(Rpush::Client::Redis::Apns::Notification.find(id), deliver_after) }
+          ids.each { |id| mark_retryable(Rpush::Client::Redis::Notification.find(id), deliver_after) }
         end
 
         def create_apns_feedback(failed_at, device_token, app)
@@ -101,6 +101,22 @@ module Rpush
         end
 
         def release_connection
+        end
+
+        def reopen_log
+        end
+
+        def pending_delivery_count
+          Modis.with_connection do |redis|
+            pending = redis.zrange(Rpush::Client::Redis::Notification.absolute_pending_namespace, 0, -1)
+            retryable = redis.zrangebyscore(Rpush::Client::Redis::Notification.absolute_retryable_namespace, 0, Time.now.to_i)
+
+            pending.count + retryable.count
+          end
+        end
+
+        def translate_integer_notification_id(id)
+          id
         end
 
         private
@@ -130,6 +146,7 @@ module Rpush
         end
 
         def pending_notification_ids(limit)
+          limit = [0, limit - 1].max # 'zrange key 0 1' will return 2 values, not 1.
           pending_ns = Rpush::Client::Redis::Notification.absolute_pending_namespace
 
           Modis.with_connection do |redis|

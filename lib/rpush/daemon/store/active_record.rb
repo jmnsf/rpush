@@ -10,6 +10,14 @@ module Rpush
 
         DEFAULT_MARK_OPTIONS = { persist: true }
 
+        def initialize
+          reopen_log
+        end
+
+        def reopen_log
+          ::ActiveRecord::Base.logger = Rpush.logger.internal_logger
+        end
+
         def app(id)
           Rpush::Client::ActiveRecord::App.find(id)
         end
@@ -53,6 +61,8 @@ module Rpush
         end
 
         def mark_ids_retryable(ids, deliver_after)
+          return if ids.empty?
+
           with_database_reconnect_and_retry do
             Rpush::Client::ActiveRecord::Notification.where(id: ids).update_all(['processing = ?, delivered = ?, delivered_at = ?, failed = ?, failed_at = ?, retries = retries + 1, deliver_after = ?', false, false, nil, false, nil, deliver_after])
           end
@@ -72,6 +82,8 @@ module Rpush
         end
 
         def mark_batch_delivered(notifications)
+          return if notifications.empty?
+
           now = Time.now
           ids = []
           notifications.each do |n|
@@ -111,6 +123,8 @@ module Rpush
         end
 
         def mark_ids_failed(ids, code, description, time)
+          return if ids.empty?
+
           with_database_reconnect_and_retry do
             Rpush::Client::ActiveRecord::Notification.where(id: ids).update_all(['processing = ?, delivered = ?, delivered_at = NULL, failed = ?, failed_at = ?, error_code = ?, error_description = ?', false, false, true, time, code, description])
           end
@@ -151,6 +165,14 @@ module Rpush
           Rpush.logger.error(e)
         end
 
+        def pending_delivery_count
+          ready_for_delivery.count
+        end
+
+        def translate_integer_notification_id(id)
+          id
+        end
+
         private
 
         def create_gcm_like_notification(notification, attrs, data, registration_ids, deliver_after, app) # rubocop:disable ParameterLists
@@ -166,7 +188,7 @@ module Rpush
         end
 
         def ready_for_delivery
-          Rpush::Client::ActiveRecord::Notification.where('processing = ? AND delivered = ? AND failed = ? AND (deliver_after IS NULL OR deliver_after < ?)', false, false, false, Time.now)
+          Rpush::Client::ActiveRecord::Notification.where('processing = ? AND delivered = ? AND failed = ? AND (deliver_after IS NULL OR deliver_after < ?)', false, false, false, Time.now).order('created_at ASC')
         end
 
         def mark_processing(notifications)

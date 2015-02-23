@@ -5,7 +5,7 @@ module Rpush
       class Delivery < Rpush::Daemon::Delivery
         include MultiJsonHelper
 
-        host = ENV["RPUSH_GCM_HOST"] || "https://android.googleapis.com"
+        host = 'https://android.googleapis.com'
         GCM_URI = URI.parse("#{host}/gcm/send")
         UNAVAILABLE_STATES = %w(Unavailable InternalServerError)
         INVALID_REGISTRATION_ID_STATES = %w(InvalidRegistration MismatchSenderId NotRegistered InvalidPackageName)
@@ -19,6 +19,9 @@ module Rpush
 
         def perform
           handle_response(do_post)
+        rescue SocketError => error
+          mark_retryable(@notification, Time.now + 10.seconds, error)
+          raise
         rescue StandardError => error
           mark_failed(error)
           raise
@@ -47,7 +50,6 @@ module Rpush
 
         def ok(response)
           results = process_response(response)
-
           handle_successes(results.successes)
 
           if results.failures.any?
@@ -98,7 +100,7 @@ module Rpush
         end
 
         def create_new_notification(response, unavailable_idxs)
-          attrs = @notification.attributes.slice('app_id', 'collapse_key', 'delay_while_idle')
+          attrs = { 'app_id' => @notification.app_id, 'collapse_key' => @notification.collapse_key, 'delay_while_idle' => @notification.delay_while_idle }
           registration_ids = @notification.registration_ids.values_at(*unavailable_idxs)
           Rpush::Daemon.store.create_gcm_notification(attrs, @notification.data,
                                                       registration_ids, deliver_after_header(response), @notification.app)
@@ -136,7 +138,7 @@ module Rpush
         end
 
         def retry_message
-          "Notification #{@notification.id} will be retried after #{@notification.deliver_after.strftime("%Y-%m-%d %H:%M:%S")} (retry #{@notification.retries})."
+          "Notification #{@notification.id} will be retried after #{@notification.deliver_after.strftime('%Y-%m-%d %H:%M:%S')} (retry #{@notification.retries})."
         end
 
         def do_post
@@ -155,7 +157,7 @@ module Rpush
           @registration_ids = registration_ids
         end
 
-        def process(failure_partitions = {})
+        def process(failure_partitions = {}) # rubocop:disable Metrics/AbcSize
           @successes = []
           @failures = Failures.new
           failure_partitions.each_key do |category|
@@ -178,13 +180,13 @@ module Rpush
               end
             end
           end
-          failures.total_fail = failures.count == @registration_ids.count
+          failures.all_failed = failures.count == @registration_ids.count
         end
       end
 
       class Failures < Hash
         include Enumerable
-        attr_writer :total_fail, :description
+        attr_writer :all_failed, :description
 
         def initialize
           super[:all] = []
@@ -202,10 +204,14 @@ module Rpush
           @description ||= describe
         end
 
+        def any?
+          self[:all].any?
+        end
+
         private
 
         def describe
-          if @total_fail
+          if @all_failed
             error_description = "Failed to deliver to all recipients."
           else
             index_list = map { |item| item[:index] }

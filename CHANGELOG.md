@@ -1,4 +1,53 @@
-## 2.0.0 (unreleased)
+## 2.4.0 (Fed 18, 2015)
+  Features:
+  * Support for MongoDB (using Mongoid).
+  * config.feedback_poll is now deprecated, use config.apns.feedback_receiver.frequency instead.
+  * Add config.apns.feedback_receiver.enabled to optionally enable the APNs feedback receiver (#129).
+  * Passing configuration options directly to Rpush.embed and Rpush.push is now deprecated.
+
+  Bug fixes:
+  * Fix setting the log level when using Rails 4+ or without Rails (#124).
+  * Fix the possibility for excessive error logging when using APNs (#128).
+  * Re-use timestamp when replacing a migration with the same name (#91).
+  * Ensure App/Notification type is updated during 2.0 upgrade migration (#102).
+
+## 2.3.2 (Jan 30, 2015)
+  Bug fixes:
+  * Internal sleep mechanism would sometimes no wait for the full duration specified.
+  * Rpush.push nows delivers all pending notifications before returning.
+  * Require thor >= 0.18.1 (#121).
+
+## 2.3.1 (Jan 24, 2015)
+  * Fix CPU thrashing while waiting for an APNs connection be established (#119).
+
+## 2.3.0 (Jan 19, 2015)
+  * Add 'version' CLI command.
+  * Rpush::Wpns::Notification now supports setting the 'data' attribute.
+  * ActiveRecord is now directed to the configured Rpush logger (#104).
+  * Logs are reopened when the HUP signal is received (#95).
+  * Fix setting config.redis_options (#114).
+  * Increase frequency of TCP keepalive probes on Linux.
+  * APNs notifications are no longer marked as failed when a dropped connection is detected, as it's impossible to know exactly how many actually failed (if any).
+  * Notifications are now retried instead of being marked as failed if a TCP/HTTP connection cannot be established.
+
+## 2.2.0 (Oct 7, 2014)
+  * Numerous command-line fixes, sorry folks!
+  * Add 'rpush push' command-line command for one-off use.
+
+## 2.1.0 (Oct 4, 2014)
+  * Bump APNs max payload size to 2048 for iOS 8.
+  * Add 'category' for iOS 8.
+  * Add url_args for Safari Push Notification Support (#77).
+  * Improved command-line interface.
+  * Rails integration is now optional.
+  * Added log_level config option.
+  * log_dir is now deprecated and has no effect, use log_file instead.
+
+## 2.0.1 (Sept 13, 2014)
+  * Add ssl_certificate_revoked reflection (#68).
+  * Fix for Postgis support in 2.0.0 migration (#70).
+
+## 2.0.0 (Sept 6, 2014)
   * Use APNs enhanced binary format version 2.
   * Support running multiple Rpush processes when using ActiveRecord and Redis.
   * APNs error detection is now performed asynchronously, 'check_for_errors' is therefore deprecated.
@@ -11,6 +60,7 @@
   * The 'batch_storage_updates' config option has been deprecated, storage backends will now always batch updates where appropriate.
   * The rpush process title updates with number of queued notifications and number of dispatchers.
   * Rpush::Apns::Feedback#app has been renamed to app_id and is now an Integer.
+  * An app is restarted when the HUP signal is received if its certificate or environment attribute changed.
 
 ## 1.0.0 (Feb 9, 2014)
   * Renamed to Rpush (from Rapns). Version number reset to 1.0.0.

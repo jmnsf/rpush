@@ -10,12 +10,12 @@ describe Rpush::Client::ActiveRecord::Wpns::Notification do
   it "should have an url in the uri parameter" do
     notification = Rpush::Client::ActiveRecord::Wpns::Notification.new(uri: "somthing")
     notification.valid?
-    notification.errors[:uri].include?("is invalid").should be_true
+    expect(notification.errors[:uri]).to include('is invalid')
   end
 
-  it "should be invalid if there's no message" do
-    notification = Rpush::Client::ActiveRecord::Wpns::Notification.new(alert: "")
+  it "should be invalid if there's no data" do
+    notification = Rpush::Client::ActiveRecord::Wpns::Notification.new(data: {})
     notification.valid?
-    notification.errors[:alert].include?("can't be blank").should be_true
+    expect(notification.errors[:data]).to include("can't be blank")
   end
-end
+end if active_record?

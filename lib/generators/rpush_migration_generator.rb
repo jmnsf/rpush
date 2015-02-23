@@ -1,12 +1,26 @@
-class RpushGenerator < Rails::Generators::Base
+class RpushMigrationGenerator < Rails::Generators::Base
   include Rails::Generators::Migration
   source_root File.expand_path('../templates', __FILE__)
 
-  def self.next_migration_number(path)
-    @time ||= Time.now.utc
-    @calls ||= -1
-    @calls += 1
-    (@time + @calls.seconds).strftime("%Y%m%d%H%M%S")
+  class << self
+    attr_accessor :next_template
+
+    def next_migration_number(path)
+      return new_migration_number unless next_template
+
+      if existing_migration = migration_exists?(File.expand_path('db/migrate'), next_template)
+        return File.basename(existing_migration).scan(/(\d+)_/).flatten.first
+      end
+
+      new_migration_number
+    end
+
+    def new_migration_number
+      @time ||= Time.now.utc
+      @calls ||= -1
+      @calls += 1
+      (@time + @calls.seconds).strftime('%Y%m%d%H%M%S')
+    end
   end
 
   def copy_migration
@@ -25,22 +39,18 @@ class RpushGenerator < Rails::Generators::Base
     end
 
     add_rpush_migration('rpush_2_0_0_updates')
-  end
-
-   def copy_config
-    copy_file 'rpush.rb', 'config/initializers/rpush.rb'
+    add_rpush_migration('rpush_2_1_0_updates')
   end
 
   protected
 
-  def add_rpush_migration(template)
-    if !has_migration?(template)
-      migration_template "#{template}.rb", "db/migrate/#{template}.rb"
-    end
-  end
-
   def has_migration?(template)
     migration_dir = File.expand_path('db/migrate')
     self.class.migration_exists?(migration_dir, template)
+   end
+
+  def add_rpush_migration(template)
+    self.class.next_template = template
+    migration_template "#{template}.rb", "db/migrate/#{template}.rb"
   end
 end

@@ -23,12 +23,12 @@ module Rpush
           super
           @dispatch_mutex = Mutex.new
           @stop_error_receiver = false
-          start_error_receiver
+          @connection.on_connect { start_error_receiver }
         end
 
         def dispatch(payload)
           @dispatch_mutex.synchronize do
-            @delivery_class.new(@app, connection, payload.batch).perform
+            @delivery_class.new(@app, @connection, payload.batch).perform
             record_batch(payload.batch)
           end
         end
@@ -37,6 +37,11 @@ module Rpush
           @stop_error_receiver = true
           super
           @error_receiver_thread.join if @error_receiver_thread
+        rescue StandardError => e
+          log_error(e)
+          reflect(:error, e)
+        ensure
+          @error_receiver_thread = nil
         end
 
         private
@@ -60,14 +65,18 @@ module Rpush
 
         def check_for_error
           begin
-            return unless connection.select(SELECT_TIMEOUT)
-          rescue Errno::EBADF
-            # Connection closed, daemon is shutting down.
+            # On Linux, select returns nil from a dropped connection.
+            # On OS X, Errno::EBADF is raised following a Errno::EADDRNOTAVAIL from the write call.
+            return unless @connection.select(SELECT_TIMEOUT)
+          rescue SystemCallError, IOError
+            # Connection closed.
             return
           end
 
-          tuple = connection.read(ERROR_TUPLE_BYTES)
+          tuple = @connection.read(ERROR_TUPLE_BYTES)
           @dispatch_mutex.synchronize { handle_error_response(tuple) }
+        rescue StandardError => e
+          log_error(e)
         end
 
         def handle_error_response(tuple)
@@ -78,22 +87,21 @@ module Rpush
             handle_disconnect
           end
 
-          log_error('Error received, reconnecting...')
-          connection.reconnect
+          log_error("Lost connection to #{@connection.host}:#{@connection.port}, reconnecting...")
+          @connection.reconnect_with_rescue
         ensure
           delivered_buffer.clear
         end
 
         def handle_disconnect
-          log_error('The APNs disconnected without returning an error. Marking all notifications delivered via this connection as failed.')
-          reason = 'The APNs disconnected without returning an error. This may indicate you are using an invalid certificate.'
-          Rpush::Daemon.store.mark_ids_failed(delivered_buffer, nil, reason, Time.now)
-          delivered_buffer.each { |id| reflect(:notification_id_failed, @app, id, nil, reason) }
+          log_error("The APNs disconnected before any notifications could be delivered. This usually indicates you are using an invalid certificate.") if delivered_buffer.size == 0
         end
 
         def handle_error(code, notification_id)
+          notification_id = Rpush::Daemon.store.translate_integer_notification_id(notification_id)
           failed_pos = delivered_buffer.index(notification_id)
           description = APNS_ERRORS[code.to_i] || "Unknown error code #{code.inspect}. Possible Rpush bug?"
+          log_error(description + " (#{code})")
           Rpush::Daemon.store.mark_ids_failed([notification_id], code, description, Time.now)
           reflect(:notification_id_failed, @app, notification_id, code, description)
 

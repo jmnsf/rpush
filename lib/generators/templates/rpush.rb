@@ -1,33 +1,33 @@
- # Rpush configuration. Options set here are overridden by command-line options.
+Rpush.configure do |config|
 
- Rpush.configure do |config|
-
-  # Supported clients are :active_record and :redis.
-  # config.client = :active_record
+  # Supported clients are :active_record, :redis and :mongoid
+  config.client = :active_record
 
   # Options passed to Redis.new
   # config.redis_options = {}
 
-  # Run in the foreground?
-  # config.foreground = false
-
   # Frequency in seconds to check for new notifications.
-  # config.push_poll = 2
-
-  # Frequency in seconds to check for feedback
-  # config.feedback_poll = 60
+  config.push_poll = 2
 
   # The maximum number of notifications to load from the store every `push_poll` seconds.
   # If some notifications are still enqueued internally, Rpush will load the batch_size less
   # the number enqueued. An exception to this is if the service is able to receive multiple
   # notification payloads over the connection with a single write, such as APNs.
-  # config.batch_size = 100
+  config.batch_size = 100
 
-  # Path to write PID file. Relative to Rails root unless absolute.
-  # config.pid_file = '/path/to/rpush.pid'
+  # Path to write PID file. Relative to current directory unless absolute.
+  config.pid_file = 'tmp/rpush.pid'
+
+  # Path to log file. Relative to current directory unless absolute.
+  config.log_file = 'log/rpush.log'
+
+  config.log_level = (defined?(Rails) && Rails.logger) ? Rails.logger.level : ::Logger::Severity::DEBUG
 
   # Define a custom logger.
   # config.logger = MyLogger.new
+
+  # config.apns.feedback_receiver.enabled = true
+  # config.apns.feedback_receiver.frequency = 60
 
  end
 
@@ -106,9 +106,21 @@ Rpush.reflect do |on|
   # on.ssl_certificate_will_expire do |app, expiration_time|
   # end
 
+  # Called when an SSL certificate has been revoked.
+  # on.ssl_certificate_revoked do |app, error|
+  # end
+
   # Called when the ADM returns a canonical registration ID.
   # You will need to replace old_id with canonical_id in your records.
   # on.adm_canonical_id do |old_id, canonical_id|
+  # end
+
+  # Called when Failed to deliver to ADM. Check the 'reason' string for further
+  # explanations.
+  #
+  # If the reason is the string 'Unregistered', you should remove
+  # this registration id from your records.
+  # on.adm_failed_to_recipient do |notification, registration_id, reason|
   # end
 
   # Called when an exception is raised.

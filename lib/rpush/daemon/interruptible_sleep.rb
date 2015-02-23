@@ -1,41 +1,22 @@
-require 'monitor'
-
 module Rpush
   module Daemon
     class InterruptibleSleep
-      def initialize(duration)
-        @duration = duration
-        @obj = Object.new
-        @obj.extend(MonitorMixin)
-        @condition = @obj.new_cond
-        @stop = false
-      end
+      def sleep(duration)
+        @thread = Thread.new { Kernel.sleep duration }
+        Thread.pass
 
-      def sleep
-        return if @stop
-        @obj.synchronize { @condition.wait(100_000) }
-      end
-
-      def start
-        @stop = false
-
-        @thread = Thread.new do
-          loop do
-            break if @stop
-            Kernel.sleep(@duration)
-            wakeup
-          end
+        begin
+          @thread.join
+        rescue StandardError # rubocop:disable Lint/HandleExceptions
+          @thread = nil
         end
       end
 
       def stop
-        @stop = true
-        wakeup
         @thread.kill if @thread
-      end
-
-      def wakeup
-        @obj.synchronize { @condition.signal }
+      rescue StandardError # rubocop:disable Lint/HandleExceptions
+      ensure
+        @thread = nil
       end
     end
   end
