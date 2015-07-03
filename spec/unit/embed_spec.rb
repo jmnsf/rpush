@@ -17,13 +17,6 @@ describe Rpush, 'embed' do
     expect(Rpush::Daemon).to receive(:start)
     Rpush.embed
   end
-
-  it 'overrides the default config options with those given as a hash' do
-    Rpush::Deprecation.muted do
-      Rpush.config.push_poll = 4
-      expect { Rpush.embed(push_poll: 2) }.to change(Rpush.config, :push_poll).to(2)
-    end
-  end
 end
 
 describe Rpush, 'shutdown' do
@@ -44,11 +37,11 @@ describe Rpush, 'sync' do
   end
 end
 
-describe Rpush, 'debug' do
+describe Rpush, 'status' do
   before { Rpush.config.embedded = true }
 
-  it 'debugs the AppRunner' do
-    expect(Rpush::Daemon::AppRunner).to receive(:debug)
-    Rpush.debug
+  it 'returns the AppRunner status' do
+    expect(Rpush::Daemon::AppRunner).to receive_messages(status: { status: true })
+    expect(Rpush.status).to eq(status: true)
   end
 end

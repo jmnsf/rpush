@@ -16,6 +16,7 @@ module Rpush
           6 => 'Missing topic size',
           7 => 'Missing payload size',
           8 => 'Invalid token',
+          10 => 'APNs closed connection (possible maintenance)',
           255 => 'None (unknown error)'
         }
 
@@ -34,6 +35,13 @@ module Rpush
         end
 
         def cleanup
+          if Rpush.config.push
+            # In push mode only a single batch is sent, followed my immediate shutdown.
+            # Allow the error receiver time to handle any errors.
+            @reconnect_disabled = true
+            sleep 1
+          end
+
           @stop_error_receiver = true
           super
           @error_receiver_thread.join if @error_receiver_thread
@@ -68,12 +76,12 @@ module Rpush
             # On Linux, select returns nil from a dropped connection.
             # On OS X, Errno::EBADF is raised following a Errno::EADDRNOTAVAIL from the write call.
             return unless @connection.select(SELECT_TIMEOUT)
-          rescue SystemCallError, IOError
-            # Connection closed.
+            tuple = @connection.read(ERROR_TUPLE_BYTES)
+          rescue *TcpConnection::TCP_ERRORS
+            reconnect unless @stop_error_receiver
             return
           end
 
-          tuple = @connection.read(ERROR_TUPLE_BYTES)
           @dispatch_mutex.synchronize { handle_error_response(tuple) }
         rescue StandardError => e
           log_error(e)
@@ -87,10 +95,21 @@ module Rpush
             handle_disconnect
           end
 
-          log_error("Lost connection to #{@connection.host}:#{@connection.port}, reconnecting...")
-          @connection.reconnect_with_rescue
+          if Rpush.config.push
+            # Only attempt to handle a single error in Push mode.
+            @stop_error_receiver = true
+            return
+          end
+
+          reconnect
         ensure
           delivered_buffer.clear
+        end
+
+        def reconnect
+          return if @reconnect_disabled
+          log_error("Lost connection to #{@connection.host}:#{@connection.port}, reconnecting...")
+          @connection.reconnect_with_rescue
         end
 
         def handle_disconnect
@@ -100,8 +119,8 @@ module Rpush
         def handle_error(code, notification_id)
           notification_id = Rpush::Daemon.store.translate_integer_notification_id(notification_id)
           failed_pos = delivered_buffer.index(notification_id)
-          description = APNS_ERRORS[code.to_i] || "Unknown error code #{code.inspect}. Possible Rpush bug?"
-          log_error(description + " (#{code})")
+          description = APNS_ERRORS[code.to_i] ? "#{APNS_ERRORS[code.to_i]} (#{code})" : "Unknown error code #{code.inspect}. Possible Rpush bug?"
+          log_error("Notification #{notification_id} failed with error: " + description)
           Rpush::Daemon.store.mark_ids_failed([notification_id], code, description, Time.now)
           reflect(:notification_id_failed, @app, notification_id, code, description)
 
@@ -110,6 +129,9 @@ module Rpush
             if retry_ids.size > 0
               now = Time.now
               Rpush::Daemon.store.mark_ids_retryable(retry_ids, now)
+              notifications_str = 'Notification'
+              notifications_str += 's' if retry_ids.size > 1
+              log_warn("#{notifications_str} #{retry_ids.join(', ')} will be retried due to the failure of notification #{notification_id}.")
               retry_ids.each { |id| reflect(:notification_id_will_retry, @app, id, now) }
             end
           elsif delivered_buffer.size > 0

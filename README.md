@@ -1,5 +1,4 @@
 [![Gem Version](https://badge.fury.io/rb/rpush.svg)](http://badge.fury.io/rb/rpush)
-[![Build Status](https://secure.travis-ci.org/rpush/rpush.svg?branch=master)](http://travis-ci.org/rpush/rpush)
 [![Join the chat at https://gitter.im/rpush/rpush](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/rpush/rpush?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 <img src="https://raw.github.com/rpush/rpush/master/logo.png" align="right" width="200px" />
@@ -22,7 +21,7 @@ Rpush aims to be the *de facto* gem for sending push notifications in Ruby. Its 
 * Plugins for [**Bugsnag**](https://github.com/rpush/rpush-plugin-bugsnag),
 [**Sentry**](https://github.com/rpush/rpush-plugin-sentry), [**StatsD**](https://github.com/rpush/rpush-plugin-statsd) or [write your own](https://github.com/rpush/rpush/wiki/Writing-a-Plugin).
 * Seamless integration with your projects, including **Rails**.
-* Run as a [daemon](https://github.com/rpush/rpush#as-a-daemon-recommended), inside a [job queue](https://github.com/rpush/rpush/wiki/Push-API), on the [command-line](https://github.com/rpush/rpush#on-the-command-line) or [embedded](https://github.com/rpush/rpush/wiki/Embedding-API) in another process.
+* Run as a [daemon](https://github.com/rpush/rpush#as-a-daemon), inside a [job queue](https://github.com/rpush/rpush/wiki/Push-API), on the [command-line](https://github.com/rpush/rpush#on-the-command-line) or [embedded](https://github.com/rpush/rpush/wiki/Embedding-API) in another process.
 * Scales vertically (threading) and horizontally (multiple processes).
 * Designed for uptime - new apps are loaded automatically, signal `HUP` to update running apps.
 * Hooks for fine-grained instrumentation and error handling ([Reflection API](https://github.com/rpush/rpush/wiki/Reflection-API)).
@@ -86,7 +85,7 @@ app.save!
 ```ruby
 n = Rpush::Gcm::Notification.new
 n.app = Rpush::Gcm::App.find_by_name("android_app")
-n.registration_ids = ["token", "..."]
+n.registration_ids = ["..."]
 n.data = { message: "hi mom!" }
 n.save!
 ```
@@ -225,5 +224,7 @@ mysql database.
 
 To switch between ActiveRecord and Redis, set the `CLIENT` environment variable to either `active_record`, `redis` or `mongoid`.
 
+
+[![Build Status](https://secure.travis-ci.org/rpush/rpush.svg?branch=master)](http://travis-ci.org/rpush/rpush)
 [![Test Coverage](https://codeclimate.com/github/rpush/rpush/badges/coverage.svg)](https://codeclimate.com/github/rpush/rpush)
 [![Code Climate](https://codeclimate.com/github/rpush/rpush/badges/gpa.svg)](https://codeclimate.com/github/rpush/rpush)

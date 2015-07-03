@@ -1,21 +1,13 @@
 module Rpush
-  def self.embed(options = {})
+  def self.embed
     require 'rpush/daemon'
-
-    unless options.empty?
-      warning = "Passing configuration options directly to Rpush.embed is deprecated and will be removed from Rpush 2.5.0. Please setup configuration using Rpush.configure { |config| ... } before calling embed."
-      Rpush::Deprecation.warn_with_backtrace(warning)
-    end
 
     if @embed_thread
       STDERR.puts 'Rpush.embed can only be run once inside this process.'
     end
 
-    config = Rpush::ConfigurationWithoutDefaults.new
-    options.each { |k, v| config.send("#{k}=", v) }
-    config.embedded = true
-    config.foreground = true
-    Rpush.config.update(config)
+    Rpush.config.embedded = true
+    Rpush.config.foreground = true
     Kernel.at_exit { shutdown }
     @embed_thread = Thread.new { Rpush::Daemon.start }
   end
@@ -36,8 +28,14 @@ module Rpush
     Rpush::Daemon::Synchronizer.sync
   end
 
-  def self.debug
+  def self.status
     return unless Rpush.config.embedded
-    Rpush::Daemon::AppRunner.debug
+    status = Rpush::Daemon::AppRunner.status
+    Rpush.logger.info(JSON.pretty_generate(status))
+    status
+  end
+
+  def self.debug
+    status
   end
 end

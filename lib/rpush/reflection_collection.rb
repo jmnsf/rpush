@@ -6,7 +6,7 @@ module Rpush
       :apns_feedback, :notification_enqueued, :notification_delivered,
       :notification_failed, :notification_will_retry, :gcm_delivered_to_recipient,
       :gcm_failed_to_recipient, :gcm_canonical_id, :gcm_invalid_registration_id,
-      :error, :adm_canonical_id, :adm_failed_to_recipient,
+      :error, :adm_canonical_id, :adm_failed_to_recipient, :wns_invalid_channel,
       :tcp_connection_lost, :ssl_certificate_will_expire, :ssl_certificate_revoked,
       :notification_id_will_retry, :notification_id_failed
     ]
@@ -17,30 +17,28 @@ module Rpush
       class_eval(<<-RUBY, __FILE__, __LINE__)
         def #{reflection}(*args, &blk)
           raise "block required" unless block_given?
-          reflections[:#{reflection}] = blk
+          @reflections[:#{reflection}] = blk
         end
       RUBY
     end
 
-    def __dispatch(reflection, *args)
-      reflection = reflection.to_sym
-
-      unless REFLECTIONS.include?(reflection)
-        fail NoSuchReflectionError, reflection
-      end
-
-      if DEPRECATIONS.key?(reflection)
-        replacement, removal_version = DEPRECATIONS[reflection]
-        Rpush::Deprecation.warn("#{reflection} is deprecated and will be removed in version #{removal_version}. Use #{replacement} instead.")
-      end
-
-      reflections[reflection].call(*args) if reflections[reflection]
+    def initialize
+      @reflections = {}
     end
 
-    private
+    def __dispatch(reflection, *args)
+      blk = @reflections[reflection]
 
-    def reflections
-      @reflections ||= {}
+      if blk
+        blk.call(*args)
+
+        if DEPRECATIONS.key?(reflection)
+          replacement, removal_version = DEPRECATIONS[reflection]
+          Rpush::Deprecation.warn("#{reflection} is deprecated and will be removed in version #{removal_version}. Use #{replacement} instead.")
+        end
+      elsif !REFLECTIONS.include?(reflection)
+        raise NoSuchReflectionError, reflection
+      end
     end
   end
 end
